@@ -233,7 +233,7 @@ export default function Publish() {
   data-position="${widgetPosition}"
   data-show-powered-by="${showPoweredBy}"
   data-capture-leads="${captureLeads}"
-  data-api-url="${window.location.origin}"
+  data-api-url="${import.meta.env.VITE_SUPABASE_URL}"
   async
 ></script>`;
 

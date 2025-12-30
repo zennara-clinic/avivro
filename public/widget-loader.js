@@ -223,6 +223,8 @@
       var messages = [];
       var conversationId = null;
       var sessionId = this.getOrCreateSessionId();
+      var leadCaptured = self.getLeadInfo(self.config.agentId) !== null;
+      var showLeadForm = self.config.captureLeads && !leadCaptured;
 
       // Load saved conversation
       var savedConversation = self.loadConversation(self.config.agentId);
@@ -293,6 +295,95 @@
           `;
 
           if (!isMinimized) {
+            // Show lead form if needed
+            if (showLeadForm) {
+              var leadFormDiv = document.createElement('div');
+              leadFormDiv.className = 'avivro-widget-messages';
+              leadFormDiv.innerHTML = `
+                <div style="padding: 24px;">
+                  <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #111;">Let's get started!</h3>
+                  <p style="margin: 0 0 24px 0; font-size: 14px; color: #6b7280;">Please share your details so we can assist you better.</p>
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Name *</label>
+                    <input type="text" id="avivro-lead-name" placeholder="Enter your name" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none;" />
+                  </div>
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Email *</label>
+                    <input type="email" id="avivro-lead-email" placeholder="Enter your email" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none;" />
+                  </div>
+                  
+                  <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Phone (Optional)</label>
+                    <input type="tel" id="avivro-lead-phone" placeholder="Enter your phone number" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none;" />
+                  </div>
+                  
+                  <div id="avivro-lead-error" style="display: none; padding: 12px; background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #DC2626;"></div>
+                  
+                  <button id="avivro-submit-lead" style="width: 100%; background: linear-gradient(135deg, ${self.config.primaryColor}, ${self.config.primaryColor}dd); border: none; color: white; padding: 14px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    Start Chat
+                  </button>
+                  
+                  <p style="margin: 12px 0 0 0; text-align: center; font-size: 11px; color: #9ca3af;">We respect your privacy and will never share your information.</p>
+                </div>
+              `;
+              
+              window.appendChild(header);
+              window.appendChild(leadFormDiv);
+              
+              setTimeout(function() {
+                document.getElementById('avivro-submit-lead').onclick = function() {
+                  var name = document.getElementById('avivro-lead-name').value.trim();
+                  var email = document.getElementById('avivro-lead-email').value.trim();
+                  var phone = document.getElementById('avivro-lead-phone').value.trim();
+                  var errorDiv = document.getElementById('avivro-lead-error');
+                  
+                  // Validation
+                  if (!name || !email) {
+                    errorDiv.textContent = 'Please fill in all required fields.';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    errorDiv.textContent = 'Please enter a valid email address.';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  // Save lead info
+                  self.saveLeadInfo(self.config.agentId, { name: name, email: email, phone: phone });
+                  leadCaptured = true;
+                  showLeadForm = false;
+                  
+                  // Add welcome message
+                  messages.push({
+                    id: 'welcome',
+                    role: 'assistant',
+                    content: self.config.welcomeMessage,
+                    timestamp: new Date()
+                  });
+                  self.saveConversation(self.config.agentId, messages, conversationId);
+                  
+                  render();
+                };
+                
+                document.getElementById('avivro-minimize-btn').onclick = function() {
+                  isMinimized = !isMinimized;
+                  render();
+                };
+                
+                document.getElementById('avivro-close-btn').onclick = function() {
+                  isOpen = false;
+                  render();
+                };
+              }, 0);
+              
+              container.appendChild(window);
+              return;
+            }
+            
             // Messages
             var messagesDiv = document.createElement('div');
             messagesDiv.className = 'avivro-widget-messages';
@@ -403,6 +494,8 @@
       function sendMessage(text) {
         if (!text.trim()) return;
 
+        var leadInfo = self.getLeadInfo(self.config.agentId);
+
         messages.push({
           id: Date.now().toString(),
           role: 'user',
@@ -434,7 +527,8 @@
           body: JSON.stringify({
             message: text,
             conversationId: conversationId,
-            sessionId: sessionId
+            sessionId: sessionId,
+            leadInfo: leadInfo
           })
         })
         .then(function(res) { return res.json(); })
@@ -551,6 +645,22 @@
         return data;
       } catch (e) {
         console.error('Failed to load conversation:', e);
+        return null;
+      }
+    },
+
+    saveLeadInfo: function(agentId, leadInfo) {
+      var key = 'avivro_lead_' + agentId;
+      localStorage.setItem(key, JSON.stringify(leadInfo));
+    },
+
+    getLeadInfo: function(agentId) {
+      var key = 'avivro_lead_' + agentId;
+      var stored = localStorage.getItem(key);
+      if (!stored) return null;
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
         return null;
       }
     }
