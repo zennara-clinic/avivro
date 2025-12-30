@@ -65,6 +65,28 @@
           transform: scale(1.1);
         }
         
+        .avivro-lead-modal {
+          position: absolute;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          border-radius: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          z-index: 100;
+        }
+        
+        .avivro-lead-form {
+          background: white;
+          border-radius: 16px;
+          padding: 24px;
+          width: 100%;
+          max-width: 384px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
         .avivro-widget-bubble.bottom-right {
           bottom: 24px;
           right: 24px;
@@ -224,7 +246,8 @@
       var conversationId = null;
       var sessionId = this.getOrCreateSessionId();
       var leadCaptured = self.getLeadInfo(self.config.agentId) !== null;
-      var showLeadForm = self.config.captureLeads && !leadCaptured;
+      var showLeadForm = false;
+      var leadInfo = { name: '', email: '', phone: '' };
 
       // Load saved conversation
       var savedConversation = self.loadConversation(self.config.agentId);
@@ -295,95 +318,6 @@
           `;
 
           if (!isMinimized) {
-            // Show lead form if needed
-            if (showLeadForm) {
-              var leadFormDiv = document.createElement('div');
-              leadFormDiv.className = 'avivro-widget-messages';
-              leadFormDiv.innerHTML = `
-                <div style="padding: 24px;">
-                  <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #111;">Let's get started!</h3>
-                  <p style="margin: 0 0 24px 0; font-size: 14px; color: #6b7280;">Please share your details so we can assist you better.</p>
-                  
-                  <div style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Name *</label>
-                    <input type="text" id="avivro-lead-name" placeholder="Enter your name" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none;" />
-                  </div>
-                  
-                  <div style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Email *</label>
-                    <input type="email" id="avivro-lead-email" placeholder="Enter your email" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none;" />
-                  </div>
-                  
-                  <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Phone (Optional)</label>
-                    <input type="tel" id="avivro-lead-phone" placeholder="Enter your phone number" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none;" />
-                  </div>
-                  
-                  <div id="avivro-lead-error" style="display: none; padding: 12px; background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #DC2626;"></div>
-                  
-                  <button id="avivro-submit-lead" style="width: 100%; background: linear-gradient(135deg, ${self.config.primaryColor}, ${self.config.primaryColor}dd); border: none; color: white; padding: 14px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    Start Chat
-                  </button>
-                  
-                  <p style="margin: 12px 0 0 0; text-align: center; font-size: 11px; color: #9ca3af;">We respect your privacy and will never share your information.</p>
-                </div>
-              `;
-              
-              window.appendChild(header);
-              window.appendChild(leadFormDiv);
-              
-              setTimeout(function() {
-                document.getElementById('avivro-submit-lead').onclick = function() {
-                  var name = document.getElementById('avivro-lead-name').value.trim();
-                  var email = document.getElementById('avivro-lead-email').value.trim();
-                  var phone = document.getElementById('avivro-lead-phone').value.trim();
-                  var errorDiv = document.getElementById('avivro-lead-error');
-                  
-                  // Validation
-                  if (!name || !email) {
-                    errorDiv.textContent = 'Please fill in all required fields.';
-                    errorDiv.style.display = 'block';
-                    return;
-                  }
-                  
-                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    errorDiv.textContent = 'Please enter a valid email address.';
-                    errorDiv.style.display = 'block';
-                    return;
-                  }
-                  
-                  // Save lead info
-                  self.saveLeadInfo(self.config.agentId, { name: name, email: email, phone: phone });
-                  leadCaptured = true;
-                  showLeadForm = false;
-                  
-                  // Add welcome message
-                  messages.push({
-                    id: 'welcome',
-                    role: 'assistant',
-                    content: self.config.welcomeMessage,
-                    timestamp: new Date()
-                  });
-                  self.saveConversation(self.config.agentId, messages, conversationId);
-                  
-                  render();
-                };
-                
-                document.getElementById('avivro-minimize-btn').onclick = function() {
-                  isMinimized = !isMinimized;
-                  render();
-                };
-                
-                document.getElementById('avivro-close-btn').onclick = function() {
-                  isOpen = false;
-                  render();
-                };
-              }, 0);
-              
-              container.appendChild(window);
-              return;
-            }
-            
             // Messages
             var messagesDiv = document.createElement('div');
             messagesDiv.className = 'avivro-widget-messages';
@@ -444,6 +378,46 @@
             window.appendChild(header);
             window.appendChild(messagesDiv);
             window.appendChild(inputDiv);
+            
+            // Lead form modal (shown when user tries to send first message)
+            if (showLeadForm) {
+              var leadModal = document.createElement('div');
+              leadModal.className = 'avivro-lead-modal';
+              leadModal.innerHTML = `
+                <div class="avivro-lead-form">
+                  <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #111;">Let's get started!</h3>
+                  <p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">Please share your details so we can assist you better.</p>
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Name *</label>
+                    <input type="text" id="avivro-lead-name" value="${leadInfo.name}" placeholder="Your full name" style="width: 100%; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none; transition: border 0.2s;" />
+                  </div>
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Email *</label>
+                    <input type="email" id="avivro-lead-email" value="${leadInfo.email}" placeholder="your@email.com" style="width: 100%; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none; transition: border 0.2s;" />
+                  </div>
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">Phone *</label>
+                    <input type="tel" id="avivro-lead-phone" value="${leadInfo.phone}" placeholder="98765 43210" maxlength="11" style="width: 100%; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; outline: none; transition: border 0.2s;" />
+                    <p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">Enter 10-digit mobile number (6-9 to start)</p>
+                  </div>
+                  
+                  <div id="avivro-lead-error" style="display: none; padding: 12px; background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 12px; margin-bottom: 16px; font-size: 13px; color: #DC2626;"></div>
+                  
+                  <div style="display: flex; gap: 8px; padding-top: 8px;">
+                    <button id="avivro-skip-lead" style="flex: 1; padding: 10px 16px; border: 2px solid #e5e7eb; border-radius: 12px; background: white; color: #374151; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                      Skip
+                    </button>
+                    <button id="avivro-submit-lead" style="flex: 1; padding: 10px 16px; border: none; border-radius: 12px; background: linear-gradient(135deg, ${self.config.primaryColor}, ${self.config.primaryColor}dd); color: white; font-weight: 700; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.2s;">
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              `;
+              window.appendChild(leadModal);
+            }
 
             // Event listeners
             setTimeout(function() {
@@ -461,14 +435,100 @@
               var sendBtn = document.getElementById('avivro-send-btn');
 
               sendBtn.onclick = function() {
-                sendMessage(input.value);
+                sendMessage(input.value, false);
               };
 
               input.onkeypress = function(e) {
                 if (e.key === 'Enter') {
-                  sendMessage(input.value);
+                  sendMessage(input.value, false);
                 }
               };
+              
+              // Lead form handlers
+              if (showLeadForm) {
+                var phoneInput = document.getElementById('avivro-lead-phone');
+                phoneInput.oninput = function(e) {
+                  var numbers = e.target.value.replace(/\D/g, '');
+                  if (numbers.length <= 10) {
+                    var formatted = numbers;
+                    if (numbers.length > 5) {
+                      formatted = numbers.slice(0, 5) + ' ' + numbers.slice(5);
+                    }
+                    leadInfo.phone = formatted;
+                    e.target.value = formatted;
+                  }
+                };
+                
+                document.getElementById('avivro-skip-lead').onclick = function() {
+                  showLeadForm = false;
+                  leadCaptured = true;
+                  render();
+                  // Send message with skip flag
+                  sendMessage(input.value, true);
+                };
+                
+                document.getElementById('avivro-submit-lead').onclick = function() {
+                  var name = document.getElementById('avivro-lead-name').value.trim();
+                  var email = document.getElementById('avivro-lead-email').value.trim();
+                  var phone = document.getElementById('avivro-lead-phone').value.trim();
+                  var errorDiv = document.getElementById('avivro-lead-error');
+                  
+                  // Validation
+                  if (!name) {
+                    errorDiv.textContent = 'Please enter your name';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (!email) {
+                    errorDiv.textContent = 'Please enter your email address';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (!phone) {
+                    errorDiv.textContent = 'Please enter your phone number';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (name.length < 2) {
+                    errorDiv.textContent = 'Name must be at least 2 characters long';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    errorDiv.textContent = 'Please enter a valid email address (e.g., name@example.com)';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  var phoneDigits = phone.replace(/\D/g, '');
+                  if (phoneDigits.length !== 10) {
+                    errorDiv.textContent = 'Please enter complete 10-digit mobile number';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+                    errorDiv.textContent = 'Mobile number must start with 6, 7, 8, or 9';
+                    errorDiv.style.display = 'block';
+                    return;
+                  }
+                  
+                  // Save lead info
+                  leadInfo = { name: name, email: email, phone: phone };
+                  self.saveLeadInfo(self.config.agentId, leadInfo);
+                  leadCaptured = true;
+                  showLeadForm = false;
+                  errorDiv.style.display = 'none';
+                  
+                  render();
+                  // Send message with lead info
+                  sendMessage(input.value, true);
+                };
+              }
 
               input.focus();
               messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -491,10 +551,17 @@
         }
       }
 
-      function sendMessage(text) {
+      function sendMessage(text, skipLeadCapture) {
         if (!text.trim()) return;
 
-        var leadInfo = self.getLeadInfo(self.config.agentId);
+        // Show lead form if enabled and not captured yet (unless explicitly skipped)
+        if (self.config.captureLeads && !leadCaptured && !skipLeadCapture && messages.length <= 1) {
+          showLeadForm = true;
+          render();
+          return;
+        }
+
+        var savedLeadInfo = self.getLeadInfo(self.config.agentId);
 
         messages.push({
           id: Date.now().toString(),
@@ -528,7 +595,7 @@
             message: text,
             conversationId: conversationId,
             sessionId: sessionId,
-            leadInfo: leadInfo
+            leadInfo: leadCaptured ? savedLeadInfo : null
           })
         })
         .then(function(res) { return res.json(); })
