@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Process Existing Knowledge</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1e3a8a; margin-bottom: 10px; }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .info { background: #e0f2fe; color: #0369a1; }
+        .success { background: #d1fae5; color: #065f46; }
+        .error { background: #fee2e2; color: #991b1b; }
+        .warning { background: #fef3c7; color: #92400e; }
+        button {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover { background: #d97706; }
+        button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+        }
+        .config {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 15px 0;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        label {
+            font-weight: 600;
+            color: #374151;
+            display: block;
+            margin-top: 10px;
+        }
+        .log {
+            background: #1f2937;
+            color: #d1d5db;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 20px;
+            display: none;
+        }
+        .log.show { display: block; }
+        .log-line { margin: 3px 0; }
+        .log-success { color: #10b981; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Process Existing Knowledge</h1>
+        <p>This tool will process your existing knowledge sources into searchable chunks with embeddings.</p>
+
+        <div class="config">
+            <label>Supabase Project URL:</label>
+            <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co">
+            
+            <label>Supabase Anon Key:</label>
+            <input type="text" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            
+            <label>Agent ID:</label>
+            <input type="text" id="agentId" placeholder="Get from URL when viewing agent">
+        </div>
+
+        <button onclick="fetchKnowledge()" id="fetchBtn">1. Fetch Knowledge Sources</button>
+        <button onclick="processAll()" id="processBtn" disabled>2. Process All Sources</button>
+
+        <div id="status"></div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let knowledgeSources = [];
+        
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            logEl.classList.add('show');
+            const line = document.createElement('div');
+            line.className = `log-line log-${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+        }
+
+        async function fetchKnowledge() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+            const agentId = document.getElementById('agentId').value.trim();
+
+            if (!url || !key || !agentId) {
+                showStatus('❌ Please fill in all configuration fields', 'error');
+                return;
+            }
+
+            document.getElementById('fetchBtn').disabled = true;
+            log('Fetching knowledge sources from Supabase...', 'info');
+
+            try {
+                const response = await fetch(`${url}/rest/v1/knowledge_sources?agent_id=eq.${agentId}&select=*`, {
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+
+                knowledgeSources = await response.json();
+                
+                log(`✅ Found ${knowledgeSources.length} knowledge sources`, 'success');
+                
+                if (knowledgeSources.length === 0) {
+                    showStatus('⚠️ No knowledge sources found. Upload some knowledge first!', 'warning');
+                } else {
+                    showStatus(`✅ Found ${knowledgeSources.length} knowledge sources ready to process`, 'success');
+                    document.getElementById('processBtn').disabled = false;
+                    
+                    knowledgeSources.forEach(source => {
+                        log(`  - ${source.name} (${source.type}) - Status: ${source.status}`, 'info');
+                    });
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                showStatus(`❌ Failed to fetch knowledge: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('fetchBtn').disabled = false;
+            }
+        }
+
+        async function processAll() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+
+            if (knowledgeSources.length === 0) {
+                showStatus('❌ No knowledge sources to process', 'error');
+                return;
+            }
+
+            document.getElementById('processBtn').disabled = true;
+            log(`Starting processing of ${knowledgeSources.length} sources...`, 'info');
+
+            let processed = 0;
+            let failed = 0;
+
+            for (const source of knowledgeSources) {
+                log(`Processing: ${source.name}...`, 'info');
+                
+                try {
+                    const response = await fetch(`${url}/functions/v1/process-knowledge`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${key}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ sourceId: source.id })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    log(`✅ ${source.name}: Created ${result.chunksCreated} chunks`, 'success');
+                    processed++;
+                } catch (error) {
+                    log(`❌ ${source.name}: ${error.message}`, 'error');
+                    failed++;
+                }
+            }
+
+            log(`\n🎉 Processing complete!`, 'success');
+            log(`   ✅ Processed: ${processed}`, 'success');
+            if (failed > 0) {
+                log(`   ❌ Failed: ${failed}`, 'error');
+            }
+
+            showStatus(`✅ Processed ${processed}/${knowledgeSources.length} sources successfully`, 'success');
+            document.getElementById('processBtn').disabled = false;
+        }
+    </script>
+</body>
+</html>
